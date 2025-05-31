@@ -43,4 +43,10 @@ Thumbs.db
 
 # Large reference files
 *.html
-API* 
+API*
+
+# Audio files
+*.mp3
+*.wav
+*.m4a
+*.aac 

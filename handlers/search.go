@@ -5,18 +5,21 @@ import (
 	"strings"
 	"time"
 
+	"news_reporter/audio"
 	"news_reporter/client"
 	"news_reporter/models"
 )
 
 type SearchHandler struct {
 	openaiClient *client.OpenAIClient
+	ttsClient    *audio.TTSClient
 }
 
 // NewSearchHandler 新しい検索ハンドラーを作成
-func NewSearchHandler(openaiClient *client.OpenAIClient) *SearchHandler {
+func NewSearchHandler(openaiClient *client.OpenAIClient, ttsClient *audio.TTSClient) *SearchHandler {
 	return &SearchHandler{
 		openaiClient: openaiClient,
+		ttsClient:    ttsClient,
 	}
 }
 
@@ -36,6 +39,56 @@ func (h *SearchHandler) HandleSearch(query string) error {
 	h.displayResult(result)
 
 	return nil
+}
+
+// HandleSearchWithAudio 検索と音声再生を処理
+func (h *SearchHandler) HandleSearchWithAudio(query string) error {
+	// 通常の検索を実行
+	if err := h.HandleSearch(query); err != nil {
+		return err
+	}
+
+	// 再度検索結果を取得（音声用）
+	result, err := h.openaiClient.Search(query)
+	if err != nil {
+		return fmt.Errorf("音声用検索に失敗しました: %w", err)
+	}
+
+	// 音声再生確認
+	fmt.Println("\n🎵 音声で要約を再生しますか？ (y/N): ")
+	var response string
+	fmt.Scanln(&response)
+
+	if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+		if result.Summary != "" {
+			// 要約を音声で再生
+			if err := h.ttsClient.SynthesizeAndPlay(result.Summary); err != nil {
+				fmt.Printf("⚠️  音声再生エラー: %v\n", err)
+				return nil // 音声再生エラーは致命的ではない
+			}
+			fmt.Println("✅ 音声再生が完了しました！")
+		} else {
+			fmt.Println("⚠️  再生可能な要約がありません")
+		}
+	}
+
+	return nil
+}
+
+// SaveAudioSummary 要約を音声ファイルとして保存
+func (h *SearchHandler) SaveAudioSummary(query, filename string) error {
+	// 検索を実行
+	result, err := h.openaiClient.Search(query)
+	if err != nil {
+		return fmt.Errorf("検索に失敗しました: %w", err)
+	}
+
+	if result.Summary == "" {
+		return fmt.Errorf("保存可能な要約がありません")
+	}
+
+	// 音声ファイルを保存
+	return h.ttsClient.SaveToFile(result.Summary, filename)
 }
 
 // displayResult 検索結果を表示
